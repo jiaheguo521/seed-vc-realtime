@@ -978,6 +978,11 @@ if __name__ == "__main__":
                 self.vad_speech_detected = True
             elif len(res_value) % 2 == 1 and self.vad_speech_detected:
                 self.set_speech_detected_false_at_end_flag = True
+                
+            # If no active speech is detected (or the current segment has ended), clear the cache to prevent infinite growth.
+            if len(res_value) == 0 or (len(res_value) > 0 and res_value[-1][1] != -1):
+                self.vad_cache = {}
+                
             end_event.record()
             if device.type == "mps":
                 torch.mps.synchronize()  # MPS - Wait for the events to be recorded!
