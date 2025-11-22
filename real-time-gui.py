@@ -916,7 +916,12 @@ if __name__ == "__main__":
             self.vad_cache = {}
             self.vad_chunk_size = min(500, 1000 * self.gui_config.block_time)
             self.vad_speech_detected = False
+            self.vad_pos_start = False
             self.set_speech_detected_false_at_end_flag = False
+            self.last_vad_time = 0
+            self.last_vad_end_time = 0
+            self.vad_input_history = np.array([], dtype=np.float32)
+            self.last_vad_reset_time = time.time()
             self.start_stream()
 
         def start_stream(self):
@@ -971,16 +976,46 @@ if __name__ == "__main__":
                 torch.cuda.synchronize()
             start_event.record()
             indata_16k = librosa.resample(indata, orig_sr=self.gui_config.samplerate, target_sr=16000)
+
+            # Periodic cache reset to prevent performance degradation during continuous speech
+            if time.time() - self.last_vad_reset_time > 10.0:
+                self.vad_cache = {}
+                # Warmup with history (last 1.5s to ensure context)
+                # Using history from BEFORE the current block to avoid processing current audio twice
+                if len(self.vad_input_history) > 0:
+                    warmup_audio = self.vad_input_history[-int(16000 * 1.5):]
+                    self.vad_model.generate(input=warmup_audio, cache=self.vad_cache, is_final=False, chunk_size=self.vad_chunk_size)
+                self.last_vad_reset_time = time.time()
+
             res = self.vad_model.generate(input=indata_16k, cache=self.vad_cache, is_final=False, chunk_size=self.vad_chunk_size)
+            
+            # Update history buffer for VAD cache reset (Sliding Window mechanism)
+            # Append AFTER processing to serve as context for the NEXT block
+            self.vad_input_history = np.concatenate((self.vad_input_history, indata_16k))
+            if len(self.vad_input_history) > 16000 * 6:  # Keep 6 seconds to support larger Block Time
+                self.vad_input_history = self.vad_input_history[-16000 * 6:]
             res_value = res[0]["value"]
-            print(res_value)
-            if len(res_value) % 2 == 1 and not self.vad_speech_detected:
+            if len(res_value) > 0:
+                print(res_value[-1:]) # Only print the last segment to avoid console spam with growing history
+            else:
+                print("[]")
+
+            for segment in res_value:
+                start_time, end_time = segment
+                if start_time != -1:
+                    self.vad_pos_start = True
+                if end_time != -1:
+                    self.vad_pos_start = False
+                    self.last_vad_end_time = time.time()
+            
+            if self.vad_pos_start:
                 self.vad_speech_detected = True
-            elif len(res_value) % 2 == 1 and self.vad_speech_detected:
-                self.set_speech_detected_false_at_end_flag = True
-                
+            else:
+                if self.vad_speech_detected and (time.time() - self.last_vad_end_time > 0.5):
+                    self.vad_speech_detected = False
+
             # If no active speech is detected (or the current segment has ended), clear the cache to prevent infinite growth.
-            if len(res_value) == 0 or (len(res_value) > 0 and res_value[-1][1] != -1):
+            if not self.vad_pos_start and not self.vad_speech_detected:
                 self.vad_cache = {}
                 
             end_event.record()
@@ -1110,10 +1145,6 @@ if __name__ == "__main__":
             total_time = time.perf_counter() - start_time
             if flag_vc:
                 self.window["infer_time"].update(int(total_time * 1000))
-
-            if self.set_speech_detected_false_at_end_flag:
-                self.vad_speech_detected = False
-                self.set_speech_detected_false_at_end_flag = False
 
             print(f"Infer time: {total_time:.2f}")
 
