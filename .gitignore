@@ -17,6 +17,7 @@ __pycache__/
 
 # misc
 checkpoints/
+venv/
 test_waves/
 reconstructed/
 .python-version
