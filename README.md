@@ -14,7 +14,7 @@ This project provides a standalone implementation of the real-time voice convers
 
 -   **OS**: Windows or Linux.
 -   **GPU**: NVIDIA GPU with CUDA support is **strongly recommended** for real-time performance.
--   **Python**: 3.10+
+-   **Python**: 3.10
 
 ## Installation & Usage
 
@@ -32,10 +32,12 @@ This project provides a standalone implementation of the real-time voice convers
     ```
 
 2.  **Install dependencies**:
+
+    *Note: The default `requirements.txt` includes CUDA 12.1 support. If you have a different CUDA version, please edit `requirements.txt` accordingly.*
+
     ```bash
     pip install -r requirements.txt
     ```
-    *Note: The default `requirements.txt` includes CUDA 12.1 support. If you have a different CUDA version, please edit `requirements.txt` accordingly.*
 
 3.  **Run the GUI**:
 ```bash
