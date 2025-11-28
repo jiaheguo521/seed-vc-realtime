@@ -37,6 +37,8 @@ This project provides a standalone implementation of the real-time voice convers
 
     ```bash
     pip install -r requirements.txt
+    pip install -U torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+
     ```
 
 3.  **Run the GUI**:

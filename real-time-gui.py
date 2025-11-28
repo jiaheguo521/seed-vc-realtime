@@ -1,5 +1,7 @@
 import os
 import sys
+import struct
+from multiprocessing import shared_memory
 from dotenv import load_dotenv
 import shutil
 
@@ -388,6 +390,18 @@ if __name__ == "__main__":
             self.config = Config()
             self.function = "vc"
             self.delay_time = 0
+            
+            # Shared Memory Setup
+            self.shm = None
+            self.delay_queue = []
+            shm_name = os.environ.get("RAS_SHARED_MEM_NAME")
+            if shm_name:
+                try:
+                    self.shm = shared_memory.SharedMemory(name=shm_name)
+                    print(f"Connected to Shared Memory: {shm_name}")
+                except Exception as e:
+                    print(f"Failed to connect to Shared Memory: {e}")
+
             self.hostapis = None
             self.input_devices = None
             self.output_devices = None
@@ -944,6 +958,19 @@ if __name__ == "__main__":
                     extra_settings=extra_settings,
                 )
                 self.stream.start()
+                
+                if self.stream:
+                     input_latency = self.stream.latency[0]
+                     output_latency = self.stream.latency[1]
+                     
+                     self.delay_time = (
+                        input_latency + output_latency
+                        + self.gui_config.block_time
+                        + self.gui_config.crossfade_time
+                        + 0.01
+                        + 0.5 # Manual Offset: 500ms extra delay to sync video
+                     )
+                     print(f"Audio Delay Calculated: {self.delay_time*1000:.2f}ms")
 
         def stop_stream(self):
             global flag_vc
@@ -953,6 +980,14 @@ if __name__ == "__main__":
                     self.stream.abort()
                     self.stream.close()
                     self.stream = None
+                
+                # Reset SHM delay on stop
+                if self.shm:
+                    try:
+                        self.shm.buf[0:8] = struct.pack('d', 0.0)
+                        print("Audio delay reset to 0.0 in SHM")
+                    except Exception as e:
+                        print(f"Failed to reset SHM: {e}")
 
         def audio_callback(
             self, indata: np.ndarray, outdata: np.ndarray, frames, times, status
@@ -1134,15 +1169,57 @@ if __name__ == "__main__":
             self.sola_buffer[:] = infer_wav[
                 self.block_frame : self.block_frame + self.sola_buffer_frame
             ]
-            outdata[:] = (
+            
+            final_output = (
                 infer_wav[: self.block_frame]
                 .repeat(self.gui_config.channels, 1)
                 .t()
                 .cpu()
                 .numpy()
             )
-
+            
             total_time = time.perf_counter() - start_time
+
+            # Sync with Shared Memory
+            if self.shm:
+                try:
+                    # Calculate total delay
+                    # We use the static estimated delay. 
+                    # Adding 'total_time' (inference time) is incorrect for buffered streams 
+                    # unless it causes buffer underruns.
+                    current_delay_ms = self.delay_time * 1000
+                    self.shm.buf[0:8] = struct.pack('d', current_delay_ms)
+                    
+                    # Read Video Delay as Target (from offset 8:16)
+                    target_delay_ms = struct.unpack('d', self.shm.buf[8:16])[0]
+                    
+                    # Determine needed extra delay
+                    extra_delay_s = max(0, (target_delay_ms - current_delay_ms) / 1000.0)
+                    
+                    # Queue output
+                    self.delay_queue.append((time.perf_counter(), final_output))
+                    
+                    # Process Queue
+                    if self.delay_queue:
+                        # Check head
+                        ts, data = self.delay_queue[0]
+                        # If we have waited enough duration for this packet
+                        # Note: This logic delays the output by holding it.
+                        if time.perf_counter() - ts >= extra_delay_s:
+                            outdata[:] = data
+                            self.delay_queue.pop(0)
+                        else:
+                            # Output silence/zeros while waiting
+                            outdata[:] = np.zeros_like(outdata)
+                    else:
+                         outdata[:] = np.zeros_like(outdata)
+
+                except Exception as e:
+                    print(f"SHM Error: {e}")
+                    outdata[:] = final_output
+            else:
+                outdata[:] = final_output
+
             if flag_vc:
                 self.window["infer_time"].update(int(total_time * 1000))
 
