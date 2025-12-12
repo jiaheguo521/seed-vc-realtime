@@ -2,9 +2,9 @@ import torch
 from torch import nn
 import math
 
-# from modules.torchscript_modules.gpt_fast_model import ModelArgs, Transformer
-from modules.wavenet import WN
-from modules.commons import sequence_mask
+# from audio_modules.torchscript_modules.gpt_fast_model import ModelArgs, Transformer
+from audio_modules.wavenet import WN
+from audio_modules.commons import sequence_mask
 
 from torch.nn.utils import weight_norm
 

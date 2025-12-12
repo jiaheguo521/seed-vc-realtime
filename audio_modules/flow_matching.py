@@ -3,8 +3,8 @@ from abc import ABC
 import torch
 import torch.nn.functional as F
 
-from modules.diffusion_transformer import DiT
-from modules.commons import sequence_mask
+from audio_modules.diffusion_transformer import DiT
+from audio_modules.commons import sequence_mask
 
 from tqdm import tqdm
 

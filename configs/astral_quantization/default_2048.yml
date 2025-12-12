@@ -1,16 +1,16 @@
-_target_: modules.astral_quantization.default_model.AstralQuantizer
+_target_: audio_modules.astral_quantization.default_model.AstralQuantizer
 tokenizer_name: "openai/whisper-small"
 ssl_model_name: "facebook/hubert-large-ll60k"
 ssl_output_layer: 18
 encoder:
-  _target_: modules.astral_quantization.convnext.ConvNeXtV2Stage
+  _target_: audio_modules.astral_quantization.convnext.ConvNeXtV2Stage
   dim: 512
   num_blocks: 12
   intermediate_dim: 1536
   dilation: 1
   input_dim: 1024
 quantizer:
-  _target_: modules.astral_quantization.bsq.BinarySphericalQuantize
+  _target_: audio_modules.astral_quantization.bsq.BinarySphericalQuantize
   codebook_size: 2048  # codebook size, must be a power of 2
   dim: 512
   entropy_loss_weight: 0.1
@@ -19,7 +19,7 @@ quantizer:
   enable_entropy_loss: True
   soft_entropy_loss: True
 decoder:
-  _target_: modules.astral_quantization.convnext.ConvNeXtV2Stage
+  _target_: audio_modules.astral_quantization.convnext.ConvNeXtV2Stage
   dim: 512
   num_blocks: 12
   intermediate_dim: 1536
@@ -27,7 +27,7 @@ decoder:
   output_dim: 1024
   gin_channels: 192
 asr_decoder:
-  _target_: modules.astral_quantization.asr_decoder.ASRDecoder
+  _target_: audio_modules.astral_quantization.asr_decoder.ASRDecoder
   hidden_dim: 768
   num_heads: 12
   depth: 12
