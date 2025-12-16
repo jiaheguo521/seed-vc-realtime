@@ -22,6 +22,9 @@ from audio_modules.commons import str2bool, recursive_munch, build_model, load_c
 now_dir = os.getcwd()
 sys.path.append(now_dir)
 
+# Script directory for relative path resolution
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
 from hf_utils import load_custom_model_from_hf
 from funasr import AutoModel
 
@@ -163,7 +166,8 @@ class RealtimeVCEngine:
         elif vocoder_type == 'hifigan':
             from audio_modules.hifigan.generator import HiFTGenerator
             from audio_modules.hifigan.f0_predictor import ConvRNNF0Predictor
-            hift_config = yaml.safe_load(open('configs/hifigan.yml', 'r'))
+            hifigan_config_path = os.path.join(SCRIPT_DIR, 'configs/hifigan.yml')
+            hift_config = yaml.safe_load(open(hifigan_config_path, 'r'))
             hift_gen = HiFTGenerator(**hift_config['hift'], f0_predictor=ConvRNNF0Predictor(**hift_config['f0_predictor']))
             hift_path = load_custom_model_from_hf("FunAudioLLM/CosyVoice-300M", 'hift.pt', None)
             hift_gen.load_state_dict(torch.load(hift_path, map_location='cpu'))
