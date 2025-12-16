@@ -79,7 +79,7 @@ class BASECFM(torch.nn.Module, ABC):
         x[..., :prompt_len] = 0
         if self.zero_prompt_speech_token:
             mu[..., :prompt_len] = 0
-        for step in tqdm(range(1, len(t_span))):
+        for step in tqdm(range(1, len(t_span)), disable=True):
             dt = t_span[step] - t_span[step - 1]
             if inference_cfg_rate > 0:
                 # Stack original and CFG (null) inputs for batched processing
